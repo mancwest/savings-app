@@ -437,12 +437,26 @@ main{ padding: 4px 16px 24px; }
 .goal-pct{ font-family:var(--font-mono); font-weight:800; font-size:16px; color:var(--goal-color, var(--coral)); flex-shrink:0; }
 
 .progress-track{
-  height:9px; border-radius:var(--radius-pill); background:var(--surface-3); overflow:hidden; margin-top:12px;
+  height:9px; border-radius:var(--radius-pill); background:var(--surface-3);
+  margin-top:20px; margin-bottom:9px; position:relative;
 }
 .progress-fill{
-  height:100%; border-radius:var(--radius-pill);
+  height:100%; border-radius:var(--radius-pill); position:relative; overflow:hidden;
   background: linear-gradient(90deg, var(--goal-color, var(--coral)), color-mix(in srgb, var(--goal-color, var(--coral)) 55%, white 30%));
   transition: width .6s cubic-bezier(.22,.9,.32,1);
+}
+.milestone-marker{
+  position:absolute; top:50%; width:17px; height:17px; border-radius:50%;
+  transform:translate(-50%,-50%);
+  background:var(--surface); border:1.5px solid var(--border);
+  display:flex; align-items:center; justify-content:center; font-size:9px;
+  filter:grayscale(1); opacity:.4; z-index:2;
+  transition: transform .3s cubic-bezier(.34,1.56,.64,1), opacity .3s ease, filter .3s ease, border-color .3s ease, background .3s ease;
+}
+.milestone-marker.reached{
+  filter:none; opacity:1; transform:translate(-50%,-50%) scale(1.18);
+  border-color: var(--goal-color, var(--mint-deep));
+  background: color-mix(in srgb, var(--goal-color, var(--mint-deep)) 22%, var(--surface));
 }
 .goal-meta-row{ display:flex; justify-content:space-between; margin-top:9px; font-size:12px; color:var(--ink-soft); }
 .goal-meta-row .mono{ font-weight:600; color:var(--ink); }
@@ -617,6 +631,18 @@ main{ padding: 4px 16px 24px; }
 .detail-hero .dh-emoji{ font-size:34px; }
 .detail-hero h3{ font-size:20px; margin-top:6px; color:#fff; }
 .detail-hero .dh-amounts{ font-family:var(--font-mono); font-size:15px; margin-top:8px; opacity:.95; }
+.detail-hero .milestone-marker{ background:rgba(255,255,255,0.9); }
+.detail-hero .milestone-marker.reached{ background:#fff; border-color:#fff; }
+
+/* Savings pace */
+.pace-stat .stat-value{ font-size:19px; }
+.pace-hint{ font-size:12px; color:var(--ink-soft); line-height:1.5; margin:8px 4px 0; }
+.pace-card{
+  border-radius:16px; padding:14px 16px; font-size:13px; line-height:1.5; font-weight:600;
+}
+.pace-card.pace-complete{ background: color-mix(in srgb, var(--mint) 16%, var(--surface)); color:var(--mint-deep); }
+.pace-card.pace-overdue{ background: color-mix(in srgb, var(--coral) 14%, var(--surface)); color:var(--coral-deep); }
+
 .wishlist-row{
   display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px solid var(--border-soft);
 }
@@ -768,6 +794,23 @@ canvas.chart-canvas{ width:100%; display:block; }
 }
 .tutorial-title{ font-size:14px; font-weight:700; }
 .tutorial-body{ font-size:12.5px; color:var(--ink-soft); line-height:1.5; margin-top:2px; }
+
+/* Badge detail sheet */
+.badge-detail-body{ text-align:center; padding:8px 8px 20px; }
+.badge-detail-icon{
+  width:76px; height:76px; border-radius:50%; margin:0 auto;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--gold) 30%, var(--surface)), var(--surface-2));
+  display:flex; align-items:center; justify-content:center; font-size:36px;
+  box-shadow: var(--shadow-sm); border:2px solid color-mix(in srgb, var(--gold) 40%, var(--border));
+}
+.badge-detail-icon.locked{ filter:grayscale(1); opacity:.5; border-color:var(--border); }
+.badge-detail-status{
+  display:inline-block; margin-top:12px; font-size:11.5px; font-weight:800;
+  text-transform:uppercase; letter-spacing:.06em; padding:5px 12px; border-radius:var(--radius-pill);
+  background:var(--surface-2); color:var(--ink-soft);
+}
+.badge-detail-status.unlocked{ background: color-mix(in srgb, var(--mint) 20%, transparent); color:var(--mint-deep); }
+.badge-detail-desc{ font-size:13.5px; color:var(--ink); line-height:1.5; margin-top:14px; }
 
 /* ======================================================================
    TOASTS & CONFETTI & LEVEL-UP
@@ -1292,6 +1335,20 @@ canvas.chart-canvas{ width:100%; display:block; }
   <button class="btn btn-primary btn-block mt-8" id="tutorialCloseBtn" type="button">Let's go! 🐹</button>
 </div>
 
+<!-- Badge detail sheet -->
+<div class="sheet" id="badgeDetailSheet" role="dialog" aria-modal="true" aria-labelledby="badgeDetailName">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <h2 id="badgeDetailName">Badge</h2>
+    <button class="sheet-close" data-close-sheet="badgeDetailSheet" aria-label="Close">✕</button>
+  </div>
+  <div class="badge-detail-body">
+    <div class="badge-detail-icon" id="badgeDetailIcon">🏅</div>
+    <div class="badge-detail-status" id="badgeDetailStatus">🔒 Locked</div>
+    <p class="badge-detail-desc" id="badgeDetailDesc">What you need to do to earn this badge.</p>
+  </div>
+</div>
+
 <!-- Toasts -->
 <div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
 
@@ -1372,21 +1429,21 @@ canvas.chart-canvas{ width:100%; display:block; }
   ];
 
   const BADGE_DEFS = [
-    { id:"first_deposit", name:"First Deposit", icon:"🌱", cond: s => s.stats.totalDeposits >= 1 },
-    { id:"first_goal", name:"Dream Set", icon:"🎯", cond: s => s.goals.length >= 1 },
-    { id:"saved_50", name:"$50 Saved", icon:"💵", cond: s => s.stats.lifetimeSaved >= 50 },
-    { id:"saved_100", name:"Centurion", icon:"💰", cond: s => s.stats.lifetimeSaved >= 100 },
-    { id:"saved_500", name:"Stacked $500", icon:"🏦", cond: s => s.stats.lifetimeSaved >= 500 },
-    { id:"saved_1000", name:"Grand Saver", icon:"👑", cond: s => s.stats.lifetimeSaved >= 1000 },
-    { id:"streak_3", name:"3-Day Streak", icon:"♨️", cond: s => s.gamify.streak >= 3 },
-    { id:"streak_7", name:"Week Warrior", icon:"🔥", cond: s => s.gamify.streak >= 7 },
-    { id:"streak_30", name:"Monthly Legend", icon:"🐹", cond: s => s.gamify.streak >= 30 },
-    { id:"goal_complete_1", name:"First Stamp", icon:"🛂", cond: s => s.goals.filter(g=>isComplete(g)).length >= 1 },
-    { id:"goal_complete_3", name:"Frequent Flyer", icon:"🧳", cond: s => s.goals.filter(g=>isComplete(g)).length >= 3 },
-    { id:"five_goals", name:"Big Dreamer", icon:"🗺️", cond: s => s.goals.length >= 5 },
-    { id:"level_5", name:"Level 5", icon:"🏆", cond: s => Gamify.levelFromXp(s.gamify.xp) >= 5 },
-    { id:"wishlist_done", name:"Bucket List", icon:"✅", cond: s => s.goals.some(g => (g.wishlist||[]).length && g.wishlist.every(w=>w.done)) },
-    { id:"zen_master", name:"Zen Master", icon:"🧘", cond: s => s.gamify.streak >= 10 }
+    { id:"first_deposit", name:"First Deposit", icon:"🌱", desc:"Log your very first deposit into any goal.", cond: s => s.stats.totalDeposits >= 1 },
+    { id:"first_goal", name:"Dream Set", icon:"🎯", desc:"Create your first savings goal.", cond: s => s.goals.length >= 1 },
+    { id:"saved_50", name:"$50 Saved", icon:"💵", desc:"Save $50 total across all your goals, lifetime.", cond: s => s.stats.lifetimeSaved >= 50 },
+    { id:"saved_100", name:"Centurion", icon:"💰", desc:"Save $100 total across all your goals, lifetime.", cond: s => s.stats.lifetimeSaved >= 100 },
+    { id:"saved_500", name:"Stacked $500", icon:"🏦", desc:"Save $500 total across all your goals, lifetime.", cond: s => s.stats.lifetimeSaved >= 500 },
+    { id:"saved_1000", name:"Grand Saver", icon:"👑", desc:"Save $1,000 total across all your goals, lifetime.", cond: s => s.stats.lifetimeSaved >= 1000 },
+    { id:"streak_3", name:"3-Day Streak", icon:"♨️", desc:"Save on 3 days in a row to build a streak.", cond: s => s.gamify.streak >= 3 },
+    { id:"streak_7", name:"Week Warrior", icon:"🔥", desc:"Keep your saving streak alive for a full 7 days.", cond: s => s.gamify.streak >= 7 },
+    { id:"streak_30", name:"Monthly Legend", icon:"🐹", desc:"Keep your saving streak alive for 30 days straight.", cond: s => s.gamify.streak >= 30 },
+    { id:"goal_complete_1", name:"First Stamp", icon:"🛂", desc:"Fully complete your first savings goal.", cond: s => s.goals.filter(g=>isComplete(g)).length >= 1 },
+    { id:"goal_complete_3", name:"Frequent Flyer", icon:"🧳", desc:"Fully complete 3 different savings goals.", cond: s => s.goals.filter(g=>isComplete(g)).length >= 3 },
+    { id:"five_goals", name:"Big Dreamer", icon:"🗺️", desc:"Create 5 savings goals — dream big.", cond: s => s.goals.length >= 5 },
+    { id:"level_5", name:"Level 5", icon:"🏆", desc:"Earn enough XP from deposits to reach Level 5.", cond: s => Gamify.levelFromXp(s.gamify.xp) >= 5 },
+    { id:"wishlist_done", name:"Bucket List", icon:"✅", desc:"Check off every item on a goal's wishlist.", cond: s => s.goals.some(g => (g.wishlist||[]).length && g.wishlist.every(w=>w.done)) },
+    { id:"zen_master", name:"Zen Master", icon:"🧘", desc:"Reach a 10-day saving streak — stay chill and consistent.", cond: s => s.gamify.streak >= 10 }
   ];
 
   /* ---------------------------------------------------------------------
@@ -1491,6 +1548,33 @@ canvas.chart-canvas{ width:100%; display:block; }
       etaText = "Add more deposits for an estimate";
     }
     return { remaining, pct, etaText };
+  }
+
+  /* Required savings pace to hit a goal's due date, recomputed live from
+     today's date so it naturally updates as time passes and as the user
+     saves. Returns null if the goal has no due date. */
+  function computeSavingsPace(goal){
+    if(!goal.dueDate) return null;
+    const remaining = Math.max(0, goal.target - goal.saved);
+    if(remaining <= 0.004) return { complete:true };
+    const daysLeft = daysBetween(todayStr(), goal.dueDate);
+    if(daysLeft <= 0) return { overdue:true, remaining };
+    const weeksLeft = daysLeft / 7;
+    const monthsLeft = daysLeft / 30.44;
+    return {
+      complete:false, overdue:false, daysLeft,
+      perWeek: remaining / weeksLeft,
+      perMonth: remaining / monthsLeft
+    };
+  }
+
+  /* Milestone marker dots (25/50/75/100%) rendered along a progress track,
+     each lighting up once the goal's saved percentage passes that mark. */
+  function buildMilestoneMarkers(pct){
+    return [25,50,75,100].map(m=>{
+      const reached = pct >= m - 0.5;
+      return `<span class="milestone-marker${reached ? " reached":""}" style="left:${m}%" title="${m}% milestone${reached ? " — reached!":""}" aria-hidden="true">🐹</span>`;
+    }).join("");
   }
 
   /* ---------------------------------------------------------------------
@@ -2595,7 +2679,10 @@ canvas.chart-canvas{ width:100%; display:block; }
           </div>
           <div class="goal-pct tabular">${Math.round(stats.pct)}%</div>
         </div>
-        <div class="progress-track"><div class="progress-fill" style="width:${stats.pct}%"></div></div>
+        <div class="progress-track">
+          <div class="progress-fill" style="width:${stats.pct}%"></div>
+          ${buildMilestoneMarkers(stats.pct)}
+        </div>
         <div class="goal-meta-row">
           <span>Saved <span class="mono">${fmtMoney(goal.saved)}</span></span>
           <span>Remaining <span class="mono">${fmtMoney(stats.remaining)}</span></span>
@@ -2611,18 +2698,50 @@ canvas.chart-canvas{ width:100%; display:block; }
       const goal = state.goals.find(g=>g.id===goalId);
       if(!goal) return;
       const stats = goalStats(goal);
+      const pace = computeSavingsPace(goal);
       document.getElementById("detailSheetTitle").textContent = goal.name;
       const body = document.getElementById("detailSheetBody");
 
       const goalTxns = state.transactions.filter(t=>t.goalId===goal.id).sort((a,b)=>new Date(b.date)-new Date(a.date));
+
+      let paceHtml = "";
+      if(pace){
+        if(pace.complete){
+          paceHtml = `
+            <div class="section-title"><h2>Savings pace</h2></div>
+            <div class="pace-card pace-complete">🎉 Goal already reached — nothing left to save!</div>
+          `;
+        } else if(pace.overdue){
+          paceHtml = `
+            <div class="section-title"><h2>Savings pace</h2></div>
+            <div class="pace-card pace-overdue">⏰ This goal's due date has passed. Save ${fmtMoney(stats.remaining)} as soon as you can, or edit the goal to set a new date.</div>
+          `;
+        } else {
+          paceHtml = `
+            <div class="section-title"><h2>Savings pace</h2></div>
+            <div class="grid-2">
+              <div class="stat-card pace-stat">
+                <div class="stat-label">Per week</div>
+                <div class="stat-value mono">${fmtMoney(pace.perWeek)}</div>
+              </div>
+              <div class="stat-card pace-stat">
+                <div class="stat-label">Per month</div>
+                <div class="stat-value mono">${fmtMoney(pace.perMonth)}</div>
+              </div>
+            </div>
+            <p class="pace-hint">To hit ${fmtDate(goal.dueDate)}, save about this much — it recalculates as your due date gets closer or you save more.</p>
+          `;
+        }
+      }
 
       body.innerHTML = `
         <div class="detail-hero" style="--goal-color:${goal.color}">
           <div class="dh-emoji" aria-hidden="true">${goal.emoji}</div>
           <h3>${escapeHtml(goal.name)}</h3>
           <div class="dh-amounts mono">${fmtMoney(goal.saved)} of ${fmtMoney(goal.target)}</div>
-          <div class="progress-track" style="background:rgba(255,255,255,0.28); margin-top:10px;">
+          <div class="progress-track" style="background:rgba(255,255,255,0.28); margin-top:16px; margin-bottom:2px;">
             <div class="progress-fill" style="width:${stats.pct}%; background:#fff;"></div>
+            ${buildMilestoneMarkers(stats.pct)}
           </div>
         </div>
 
@@ -2636,6 +2755,8 @@ canvas.chart-canvas{ width:100%; display:block; }
             <div class="stat-value" style="font-size:14px;">${stats.etaText}</div>
           </div>
         </div>
+
+        ${paceHtml}
 
         ${goal.notes ? `<div class="card mt-12"><p style="font-size:13.5px; color:var(--ink-soft); line-height:1.5;">${escapeHtml(goal.notes)}</p></div>` : ""}
 
@@ -2787,9 +2908,28 @@ canvas.chart-canvas{ width:100%; display:block; }
         const unlocked = state.gamify.badges.includes(def.id);
         const item = document.createElement("div");
         item.className = "badge-item" + (unlocked ? " unlocked":"");
+        item.setAttribute("role","button");
+        item.setAttribute("tabindex","0");
+        item.setAttribute("aria-label", def.name + (unlocked ? " — unlocked" : " — locked, tap for details"));
         item.innerHTML = `<div class="b-icon" aria-hidden="true">${def.icon}</div><div class="b-name">${def.name.replace("\\n"," ")}</div>`;
+        item.addEventListener("click", ()=> UI.openBadgeDetail(def.id));
+        item.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); UI.openBadgeDetail(def.id); }});
         badgeScroll.appendChild(item);
       });
+    },
+
+    /* Badge detail sheet: shows what a badge is for and whether it's unlocked yet */
+    openBadgeDetail(badgeId){
+      const def = BADGE_DEFS.find(b=>b.id===badgeId);
+      if(!def) return;
+      const unlocked = state.gamify.badges.includes(def.id);
+      document.getElementById("badgeDetailIcon").textContent = def.icon;
+      document.getElementById("badgeDetailIcon").classList.toggle("locked", !unlocked);
+      document.getElementById("badgeDetailName").textContent = def.name.replace("\\n"," ");
+      document.getElementById("badgeDetailStatus").textContent = unlocked ? "✓ Unlocked" : "🔒 Locked";
+      document.getElementById("badgeDetailStatus").className = "badge-detail-status" + (unlocked ? " unlocked" : "");
+      document.getElementById("badgeDetailDesc").textContent = def.desc || "";
+      UI.openSheet("badgeDetailSheet");
     },
 
     /* ---------------- ANALYTICS ---------------- */
